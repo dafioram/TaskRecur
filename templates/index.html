@@ -79,7 +79,9 @@
         <div class="event-card" style="border-left-color: {{ e.get_urgency_color() }}">
             <div class="card-top">
                 <div class="card-content">
-                    <a href="/edit/{{ e.id }}" style="color: white; text-decoration: none; font-weight: 500;">{{ e.content }}</a>
+                    <span style="color: white; font-weight: 500;">{{ e.content }}</span>
+                    
+                    <a href="/edit/{{ e.id }}" style="text-decoration: none; font-size: 0.95rem;" title="Edit Task">✏️</a>
                     
                     {% if e.template_id %}
                         <span style="font-size: 0.9rem;" title="Recurring automated event template">⭯</span>
