@@ -1,0 +1,12 @@
+services:
+  scheduler:
+    build: .
+    container_name: scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-5000}:5000"
+    volumes:
+      # This mapping ensures your database survives if you delete the container
+      - ./data:/app/data
