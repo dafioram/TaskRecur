@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recurrence Control Panel</title>
+    <style>
+        body {
+            background-color: #121212; color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .back-link { color: #bb86fc; text-decoration: none; font-weight: bold; }
+        
+        .template-table {
+            width: 100%; border-collapse: collapse; background: #1e1e1e;
+            border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .template-table th, .template-table td { padding: 14px; text-align: left; border-bottom: 1px solid #333; }
+        .template-table th { background-color: #2c2c2c; color: #bb86fc; font-size: 0.9rem; }
+        .template-table tr:hover { background: #252525; }
+        
+        .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-type { background: #448aff; color: white; }
+        .badge-date { background: #333; color: #aaa; }
+        .delete-link { color: #ff5252; text-decoration: none; font-size: 0.85rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1 style="color: #bb86fc; margin: 0;">Recurrence Engine Blueprints</h1>
+        <a href="/" class="back-link">← Return to Workspace</a>
+    </div>
+
+    <table class="template-table">
+        <thead>
+            <tr>
+                <th>Blueprint Config</th>
+                <th>Operation Strategy</th>
+                <th>Active Tracking Status</th>
+                <th>Next Projected Window</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in templates %}
+            <tr>
+                <td style="font-weight: bold; color: white;">{{ entry.template.title }}</td>
+                <td>
+                    <span class="badge badge-type">{{ entry.template.recurrence_type|upper }}</span>
+                    <span style="font-size: 0.85rem; color: #aaa; margin-left: 4px;">
+                        {% if entry.template.recurrence_type in ['relative', 'interval'] %}
+                            Every {{ entry.template.interval_value }} {{ entry.template.interval_unit }}
+                        {% else %}
+                            Every year on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
+                        {% endif %}
+                    </span>
+                </td>
+                <td>
+                    {% if entry.active_instance %}
+                        <span style="color: #69f0ae; font-size: 0.85rem;">● Tracked (Event #{{ entry.active_instance.id }})</span>
+                    {% else %}
+                        <span style="color: #ffab40; font-size: 0.85rem;">⚠️ No Active Row in View</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge badge-date">{{ entry.next_projected }}</span>
+                </td>
+                <td>
+                    <a href="/template/delete/{{ entry.template.id }}" class="delete-link" onclick="return confirm('Deleting this template stops all future iterations. The historical events will remain untouched.');">Tear Down</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; color: #666; padding: 30px;">No operational recurrence blueprints defined. Promote a task via the Edit panel to initialize tracking.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

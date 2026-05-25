@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Event</title>
+    <style>
+        body {
+            background-color: #121212; color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 15px; 
+        }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(18, 18, 18, 0.85);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; padding: 20px; overflow-y: auto;
+        }
+        .edit-card {
+            background: #1e1e1e; padding: 30px; border-radius: 12px;
+            width: 100%; max-width: 480px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8);
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        h2 { margin: 0; color: #bb86fc; }
+        input[type="text"], textarea, select {
+            width: 100%; padding: 14px; border-radius: 8px;
+            border: 1px solid #333; font-size: 16px;
+            background: #2c2c2c; color: white; outline: none;
+            box-sizing: border-box; font-family: inherit;
+        }
+        .meta-inputs { display: flex; gap: 10px; }
+        .small-input {
+            background: #2c2c2c; color: #aaa; border: 1px solid #333; padding: 10px;
+            border-radius: 6px; font-size: 14px; outline: none; flex: 1; min-width: 0;
+        }
+        
+        /* Recurrence Selection Styles */
+        .recurrence-box {
+            border: 1px solid #333; border-radius: 8px; padding: 15px; background: #161616;
+        }
+        .radio-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        .radio-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+        .radio-label input[type="radio"] { accent-color: #bb86fc; transform: scale(1.1); }
+        .config-pane {
+            margin-top: 12px; padding-top: 12px; border-top: 1px dashed #333;
+            display: none; gap: 10px;
+        }
+        .inline-inputs { display: flex; gap: 8px; align-items: center; }
+        .inline-inputs input { width: 70px; text-align: center; }
+        .inline-inputs select { width: auto; padding: 8px 12px; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn {
+            flex: 1; padding: 12px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; text-decoration: none;
+        }
+        .save-btn { background-color: #bb86fc; color: #000; }
+        .cancel-btn { background-color: #333; color: #fff; }
+        .delete-btn-modal { background-color: transparent; border: 1px solid #ff5252; color: #ff5252; }
+        .delete-btn-modal:hover { background-color: #ff5252; color: #000; }
+    </style>
+</head>
+<body>
+
+    <div class="modal-overlay">
+        <div class="edit-card">
+            <h2>Edit Event <span style="font-size: 0.6em; color: #555; vertical-align: middle;">#{{ event.id }}</span></h2>
+            <form method="POST">
+                <input type="text" name="content" style="margin-bottom: 10px;" value="{{ event.content }}" required autocomplete="off">
+                
+                <textarea name="context" rows="3" placeholder="Add details, links, or notes..." style="font-size: 14px; color: #aaa; margin-bottom: 10px;">{{ event.context or '' }}</textarea>
+                
+                <div class="meta-inputs">
+                    <input type="text" name="label" class="small-input" placeholder="Label" list="labels-list" value="{{ event.label or '' }}">
+                    <input type="text" name="assignee" class="small-input" placeholder="Assignee" list="assignees-list" value="{{ event.assignee or '' }}">
+                    <input type="date" name="due_date" class="small-input" value="{{ event.due_date.isoformat() if event.due_date else '' }}" required>
+                </div>
+
+                <div class="recurrence-box" style="margin-top: 15px;">
+                    <span style="font-size: 0.85rem; font-weight: bold; color: #bb86fc;">Recurrence Configuration</span>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence_type" value="none" {% if not template %}checked{% endif %} onchange="toggleRecurrencePanes()">
+                            One-off Event (Does not repeat)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence_type" value="relative" {% if template and template.recurrence_type == 'relative' %}checked{% endif %} onchange="toggleRecurrencePanes()">
+                            Relative Interval (From actual completion date)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence_type" value="interval" {% if template and template.recurrence_type == 'interval' %}checked{% endif %} onchange="toggleRecurrencePanes()">
+                            Absolute Interval (From previous scheduled due date)
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence_type" value="calendar" {% if template and template.recurrence_type == 'calendar' %}checked{% endif %} onchange="toggleRecurrencePanes()">
+                            Calendar Anchor (Specific annual/monthly date)
+                        </label>
+                    </div>
+
+                    <div id="pane-interval" class="config-pane">
+                        <div class="inline-inputs">
+                            <span>Repeat every</span>
+                            <input type="number" name="interval_value" class="small-input" min="1" value="{{ template.interval_value if template else 1 }}">
+                            <select name="interval_unit">
+                                <option value="days" {% if template and template.interval_unit == 'days' %}selected{% endif %}>Days</option>
+                                <option value="weeks" {% if template and template.interval_unit == 'weeks' %}selected{% endif %}>Weeks</option>
+                                <option value="months" {% if template and template.interval_unit == 'months' %}selected{% endif %}>Months</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="pane-calendar" class="config-pane">
+                        <div class="inline-inputs">
+                            <span>Every year on:</span>
+                            <select name="calendar_month">
+                                {% for m in range(1, 13) %}
+                                    <option value="{{ m }}" {% if template and template.calendar_month == m %}selected{% endif %}>
+                                        {{ datetime.date(2000, m, 1).strftime('%B') }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <input type="number" name="calendar_day" class="small-input" min="1" max="31" placeholder="Day" value="{{ template.calendar_day if template else 1 }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <a href="/delete/{{ event.id }}" class="btn delete-btn-modal" onclick="return confirm('Permanently delete this event instance?');">Delete</a>
+                    <a href="/" class="btn cancel-btn">Cancel</a>
+                    <button type="submit" class="btn save-btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleRecurrencePanes() {
+            const selected = document.querySelector('input[name="recurrence_type"]:checked').value;
+            const paneInterval = document.getElementById('pane-interval');
+            const paneCalendar = document.getElementById('pane-calendar');
+            
+            paneInterval.style.display = (selected === 'relative' || selected === 'interval') ? 'flex' : 'none';
+            paneCalendar.style.display = (selected === 'calendar') ? 'flex' : 'none';
+        }
+        // Initialize visibility configurations on render
+        document.addEventListener("DOMContentLoaded", toggleRecurrencePanes);
+    </script>
+</body>
+</html>

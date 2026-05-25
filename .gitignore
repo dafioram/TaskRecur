@@ -1,0 +1,9 @@
+data
+
+# Environments & Config
+.env
+venv/
+.venv/
+env/
+
+__pycache__
