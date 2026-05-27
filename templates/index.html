@@ -53,20 +53,26 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1 style="color: #bb86fc; margin: 0;">Timeline Workspace</h1>
-        <div class="nav-links">
-            <a href="/templates">⚙️ Recurrence Control Panel</a>
-            <a href="/history">📜 Historical Archives</a>
-        </div>
-    </div>
+	<div class="header-container" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 15px;">
+		<h1 style="margin: 0; color: #bb86fc;">Timeline</h1>
+		<div style="display: flex; gap: 15px; font-size: 0.9rem;">
+			<a href="/templates" style="color: #bb86fc; text-decoration: none;">⚙️ Recurring</a>
+			<a href="/history" style="color: #bb86fc; text-decoration: none;">📜 Activity</a>
+		</div>
+	</div>
 
-    <form class="add-box" action="/add" method="POST">
-        <input type="text" name="content" placeholder="Drop quick entry here..." required autocomplete="off">
-        <input type="date" name="due_date" value="{{ datetime.date.today().isoformat() }}">
-        <button type="submit" class="add-btn">Track</button>
-    </form>
+	<form action="/add" method="POST" style="display: flex; gap: 8px; width: 100%; margin-bottom: 20px; box-sizing: border-box;">
+		<input type="text" name="content" placeholder="Drop quick entry here..." required
+			   style="flex: 1; min-width: 0; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #222; color: white;">
+		
+		<input type="date" name="due_date" value="{{ datetime.date.today().isoformat() }}" required
+			   style="width: 130px; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #222; color: white; color-scheme: dark;">
+		
+		<button type="submit" 
+				style="padding: 10px 14px; border-radius: 6px; background: #bb86fc; color: black; font-weight: bold; border: none; cursor: pointer;">
+			Add
+		</button>
+	</form>
 
     <div class="filter-bar">
         <a href="/" class="filter-pill {% if not active_filter and not active_assignee %}active{% endif %}">All</a>
