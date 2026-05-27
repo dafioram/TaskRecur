@@ -42,6 +42,18 @@
             text-decoration: none; font-size: 0.85rem; padding: 5px 10px;
             border-radius: 4px; font-weight: bold; background: #2c2c2c; color: #ccc;
         }
+		
+		/* Rotates the chevron when the parent <details> is open */
+		details[open] .chevron {
+			transform: rotate(90deg);
+			color: #bb86fc;
+		}
+
+		/* Hides the default ugly browser summary arrow across Chrome/Safari/Firefox */
+		details summary::-webkit-details-marker {
+			display: none;
+		}
+		
         .complete-icon { background: #69f0ae; color: #000; }
         .skip-icon { background: #ffab40; color: #000; }
         
@@ -112,9 +124,17 @@
                     <span style="font-size: 0.75rem; color: #aaa;">👤 {{ e.assignee }}</span>
                 {% endif %}
             </div>
-            {% if e.context %}
-                <div style="font-size: 0.85rem; color: #888; background: #161616; padding: 8px; border-radius: 4px;">{{ e.context }}</div>
-            {% endif %}
+		{% if e.context %}
+                <details style="margin-top: 10px; width: 100%;">
+                    <summary style="font-size: 0.85rem; color: #bb86fc; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 5px; user-select: none;">
+                        <span class="chevron" style="transition: transform 0.2s ease; display: inline-block;">▶</span> 
+                        <span style="font-size: 0.8rem; color: #888;">Details</span>
+                    </summary>
+                    <div style="font-size: 0.85rem; color: #ccc; background: #161616; padding: 10px; border-radius: 4px; margin-top: 6px; border-left: 2px solid #333; line-height: 1.4;">
+                        {{ e.context }}
+                    </div>
+                </details>
+        {% endif %}
         </div>
         {% endmacro %}
 
