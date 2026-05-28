@@ -104,10 +104,14 @@ def init_db(app):
         db.session.execute(text("PRAGMA journal_mode=WAL"))
         db.create_all()
 
+import os
+import datetime
+import shutil
+
 def perform_backup(db_path, data_dir):
-    """Keeps up to 5 rolling historical database backups on application startup."""
+    """Keeps up to 5 rolling historical database backups on application startup or API call."""
     if not os.path.exists(db_path):
-        return
+        return False, "Database file not found."
         
     backup_dir = os.path.join(data_dir, 'backups')
     os.makedirs(backup_dir, exist_ok=True)
@@ -125,5 +129,11 @@ def perform_backup(db_path, data_dir):
         )
         while len(all_backups) > 5:
             os.remove(all_backups.pop(0))
+            
+        # Return True for success and the path to the new backup file
+        return True, backup_path
+        
     except Exception as e:
         print(f"Backup engine failed safely: {e}")
+        # Return False for failure and the string representation of the error
+        return False, str(e)

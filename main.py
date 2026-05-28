@@ -261,8 +261,25 @@ def delete_template(id):
         db.session.commit()
     return redirect(url_for('view_templates'))
 
+@app.route('/api/backup', methods=['POST'])
+def api_backup():
+    expected_api_key = os.environ.get('API_BACKUP_KEY')
+    
+    if not expected_api_key:
+        return jsonify({"status": "error", "message": "Backup API key not configured on server."}), 403
+        
+    provided_key = request.headers.get('X-Backup-Key')
+    if not provided_key or provided_key != expected_api_key:
+        return jsonify({"status": "error", "message": "Unauthorized: Invalid or missing Backup key."}), 401
+
+    success, result = perform_backup(db_path, data_dir)
+    if success:
+        return jsonify({"status": "success", "message": "Database backup completed.", "file": result}), 200
+    else:
+        return jsonify({"status": "error", "message": "Backup failed.", "error_details": result}), 500
+
 if __name__ == '__main__':
     if not os.environ.get("WERKZEUG_RUN_MAIN") and os.path.exists(db_path):
         perform_backup(db_path, data_dir)
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port, debug=True)
+    port_num = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port_num, debug=True)
