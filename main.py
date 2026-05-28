@@ -2,9 +2,17 @@ from flask import Flask, render_template, request, redirect, url_for, send_from_
 from sqlalchemy import text
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+import time
 import datetime
 
 from database import db, Event, RecurrenceTemplate, init_db, perform_backup
+
+# --- TIMEZONE SETUP ---
+# Force Python to respect the TZ environment variable, defaulting to Eastern Time
+os.environ['TZ'] = os.environ.get('TZ', 'America/New_York')
+if hasattr(time, 'tzset'):
+    time.tzset() # Syncs the C library time (works on Linux/Docker, safely ignored on Windows)
+# ----------------------
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -256,4 +264,5 @@ def delete_template(id):
 if __name__ == '__main__':
     if not os.environ.get("WERKZEUG_RUN_MAIN") and os.path.exists(db_path):
         perform_backup(db_path, data_dir)
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port, debug=True)
