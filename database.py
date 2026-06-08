@@ -48,6 +48,8 @@ class RecurrenceTemplate(db.Model):
             elif self.recurrence_type == 'calendar':
                 # Calendar moves to the next year if the baseline date is already this year's instance
                 year = current.year
+                interval = self.interval_value if self.interval_value else 1
+                
                 try:
                     candidate = datetime.date(year, self.calendar_month, self.calendar_day)
                 except ValueError: # Handle Feb 29
@@ -56,7 +58,7 @@ class RecurrenceTemplate(db.Model):
                 # If our candidate is the same as or before the baseline, 
                 # we MUST jump to at least the next year.
                 if candidate <= current:
-                    year += 1
+                    year += interval
                 
                 while True:
                     try:

@@ -100,14 +100,19 @@ def history():
 def view_templates():
     templates = RecurrenceTemplate.query.all()
     template_statuses = []
+    
     for t in templates:
         active_inst = Event.query.filter_by(template_id=t.id, completed_at=None).first()
         next_calc = t.calculate_next_date(active_inst.due_date if active_inst else None)
+        
         template_statuses.append({
             'template': t,
             'active_instance': active_inst,
-            'next_projected': next_calc
+            'next_projected': next_calc,
+            # Use the template's title directly
+            'event_name': t.title 
         })
+        
     return render_template('templates.html', templates=template_statuses)
 
 @app.route('/add', methods=['POST'])
@@ -176,11 +181,14 @@ def edit_event(id):
             template.assignee = event.assignee
             
             if rec_type in ['relative', 'interval']:
-                template.interval_value = int(request.form.get('interval_value', 1))
+                # The 'or 1' protects against empty strings if the user clears the box
+                template.interval_value = int(request.form.get('interval_value') or 1)
                 template.interval_unit = request.form.get('interval_unit', 'days')
             elif rec_type == 'calendar':
-                template.calendar_month = int(request.form.get('calendar_month', 1))
-                template.calendar_day = int(request.form.get('calendar_day', 1))
+                # Apply the same protection to the calendar fields
+                template.interval_value = int(request.form.get('calendar_interval') or 1)
+                template.calendar_month = int(request.form.get('calendar_month') or 1)
+                template.calendar_day = int(request.form.get('calendar_day') or 1)
                 
             # 3. Safely flush or let SQLAlchemy handle it at commit time
             db.session.flush()

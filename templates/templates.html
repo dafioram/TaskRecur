@@ -37,10 +37,10 @@
     </div>
 
     <table class="template-table">
-        <thead>
+		<thead>
             <tr>
+                <th>Event Name</th>
                 <th>Blueprint Config</th>
-                <th>Operation Strategy</th>
                 <th>Active Tracking Status</th>
                 <th>Next Projected Window</th>
                 <th>Actions</th>
@@ -49,14 +49,18 @@
         <tbody>
             {% for entry in templates %}
             <tr>
-                <td style="font-weight: bold; color: white;">{{ entry.template.title }}</td>
-                <td>
+				<td>{{ entry.event_name }}</td>
+				<td>
                     <span class="badge badge-type">{{ entry.template.recurrence_type|upper }}</span>
                     <span style="font-size: 0.85rem; color: #aaa; margin-left: 4px;">
                         {% if entry.template.recurrence_type in ['relative', 'interval'] %}
                             Every {{ entry.template.interval_value }} {{ entry.template.interval_unit }}
                         {% else %}
-                            Every year on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
+                            {% if entry.template.interval_value == 1 %}
+                                Every year on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
+                            {% else %}
+                                Every {{ entry.template.interval_value }} years on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
+                            {% endif %}
                         {% endif %}
                     </span>
                 </td>
