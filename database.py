@@ -27,37 +27,48 @@ class RecurrenceTemplate(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.now)
 
     def calculate_next_date(self, baseline_date):
-        """Calculates the next valid future date (datetime.date object) strictly after today."""
-        today = datetime.date.today()
-        current = baseline_date if baseline_date else today
-        
-        if self.recurrence_type == 'relative':
-            delta_args = {self.interval_unit: self.interval_value}
-            return today + relativedelta(**delta_args)
+            """Calculates the next valid future date strictly after the baseline."""
+            today = datetime.date.today()
+            # Use baseline if provided, otherwise fallback to today
+            current = baseline_date if baseline_date else today
+            
+            if self.recurrence_type == 'relative':
+                # Relative ALWAYS moves forward from the moment of completion (today)
+                delta_args = {self.interval_unit: self.interval_value}
+                return today + relativedelta(**delta_args)
 
-        elif self.recurrence_type == 'interval':
-            delta_args = {self.interval_unit: self.interval_value}
-            while True:
-                current = current + relativedelta(**delta_args)
-                if current > today:
-                    return current
+            elif self.recurrence_type == 'interval':
+                # Interval moves forward from the target due date
+                delta_args = {self.interval_unit: self.interval_value}
+                while True:
+                    current = current + relativedelta(**delta_args)
+                    if current > today:
+                        return current
 
-        elif self.recurrence_type == 'calendar':
-            year = today.year
-            if self.calendar_month and self.calendar_day:
+            elif self.recurrence_type == 'calendar':
+                # Calendar moves to the next year if the baseline date is already this year's instance
+                year = current.year
                 try:
                     candidate = datetime.date(year, self.calendar_month, self.calendar_day)
-                except ValueError:
+                except ValueError: # Handle Feb 29
                     candidate = datetime.date(year, self.calendar_month, self.calendar_day - 1)
                 
-                while candidate <= today:
+                # If our candidate is the same as or before the baseline, 
+                # we MUST jump to at least the next year.
+                if candidate <= current:
                     year += 1
+                
+                while True:
                     try:
                         candidate = datetime.date(year, self.calendar_month, self.calendar_day)
                     except ValueError:
                         candidate = datetime.date(year, self.calendar_month, self.calendar_day - 1)
-                return candidate
-        return None
+                    
+                    if candidate > today:
+                        return candidate
+                    year += 1
+                    
+            return None
 
 class Event(db.Model):
     __tablename__ = 'event'
