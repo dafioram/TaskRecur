@@ -96,6 +96,17 @@ def history():
     finished_events = Event.query.filter(Event.completed_at.isnot(None)).order_by(Event.completed_at.desc()).all()
     return render_template('history.html', events=finished_events)
 
+@app.route('/update_note/<int:id>')
+def update_note(id):
+    event = db.session.get(Event, id)
+    if event:
+        note = request.args.get('note')
+        # If they pass a note, save it. If they pass an empty string, clear it.
+        if note is not None:
+            event.completion_note = note.strip() if note.strip() else None
+        db.session.commit()
+    return redirect(url_for('history'))
+
 @app.route('/templates')
 def view_templates():
     templates = RecurrenceTemplate.query.all()
@@ -287,7 +298,5 @@ def api_backup():
         return jsonify({"status": "error", "message": "Backup failed.", "error_details": result}), 500
 
 if __name__ == '__main__':
-    if not os.environ.get("WERKZEUG_RUN_MAIN") and os.path.exists(db_path):
-        perform_backup(db_path, data_dir)
     port_num = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port_num, debug=True)

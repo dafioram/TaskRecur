@@ -29,14 +29,28 @@
         <a href="/" class="back-link">← Return to Workspace</a>
     </div>
 
-    <div class="stream">
+<div class="stream">
         {% for e in events %}
         <div class="history-card" style="{% if e.completion_note == '[SKIPPED]' %}border-left-color: #ffab40; opacity: 0.6;{% endif %}">
-            <div>
+            <div style="flex: 1;">
                 <span style="font-weight: 500; text-decoration: line-through; color: #888;">{{ e.content }}</span>
-                {% if e.completion_note %}
-                    <span style="font-size: 0.8rem; color: #ffab40; margin-left: 8px;">{{ e.completion_note }}</span>
-                {% endif %}
+                
+				{% if e.completion_note and e.completion_note != '[SKIPPED]' %}
+					<span style="font-size: 0.85rem; color: #a792c1; font-style: italic; margin-left: 8px; padding-left: 8px; border-left: 2px solid #444; cursor: pointer;" 
+						  data-note="{{ e.completion_note }}" 
+						  onclick="return promptForNote({{ e.id }}, this.getAttribute('data-note'));" 
+						  title="Edit Note">
+						"{{ e.completion_note }}" ✏️
+					</span>
+				{% elif e.completion_note != '[SKIPPED]' %}
+					<span style="font-size: 0.75rem; color: #555; margin-left: 8px; cursor: pointer; text-decoration: underline;" 
+						  onclick="return promptForNote({{ e.id }}, '');">
+						+ Add Note
+					</span>
+				{% else %}
+					 <span style="font-size: 0.8rem; color: #ffab40; margin-left: 8px;">[SKIPPED]</span>
+				{% endif %}
+                
                 <div style="font-size: 0.75rem; color: #555; margin-top: 4px;">Originally due on {{ e.due_date }}</div>
             </div>
             <span class="stamp">Finished: {{ e.completed_at.strftime('%Y-%m-%d %H:%M') }}</span>
@@ -45,6 +59,20 @@
         <div style="text-align: center; padding: 40px; color: #555;">No execution history records found in this partition.</div>
         {% endfor %}
     </div>
-</div>
+	<script>
+    function promptForNote(eventId, currentNote) {
+        // Prompt the user, pre-filling with the existing note if there is one
+        let newNote = prompt("Add or edit completion note (leave blank to clear):", currentNote);
+        
+        // If they click cancel, do nothing
+        if (newNote === null) {
+            return false;
+        }
+        
+        // Redirect to the new python route with the text
+        window.location.href = "/update_note/" + eventId + "?note=" + encodeURIComponent(newNote);
+        return false;
+    }
+</script>
 </body>
 </html>
