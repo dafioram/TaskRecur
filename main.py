@@ -96,7 +96,7 @@ def history():
     finished_events = Event.query.filter(Event.completed_at.isnot(None)).order_by(Event.completed_at.desc()).all()
     return render_template('history.html', events=finished_events)
 
-@app.route('/update_note/<int:id>')
+@app.route('/update_note/<int:id>', methods=['POST'])
 def update_note(id):
     event = db.session.get(Event, id)
     if event:
@@ -221,7 +221,7 @@ def edit_event(id):
                            all_labels=[(l, 0) for l in sorted(unique_labels)],
                            datetime=datetime)
 
-@app.route('/toggle/<int:id>')
+@app.route('/toggle/<int:id>', methods=['POST'])
 def toggle_event(id):
     event = db.session.get(Event, id)
     if event:
@@ -243,7 +243,7 @@ def toggle_event(id):
         db.session.commit()
     return redirect(url_for('index'))
 
-@app.route('/skip/<int:id>')
+@app.route('/skip/<int:id>', methods=['POST'])
 def skip_event(id):
     event = db.session.get(Event, id)
     if event and event.template_id:
@@ -264,7 +264,7 @@ def skip_event(id):
         db.session.commit()
     return redirect(url_for('index'))
 
-@app.route('/delete/<int:id>')
+@app.route('/delete/<int:id>', methods=['POST'])
 def delete_event(id):
     event = db.session.get(Event, id)
     if event:
@@ -272,7 +272,7 @@ def delete_event(id):
         db.session.commit()
     return redirect(url_for('index'))
 
-@app.route('/template/delete/<int:id>')
+@app.route('/template/delete/<int:id>', methods=['POST'])
 def delete_template(id):
     template = db.session.get(RecurrenceTemplate, id)
     if template:

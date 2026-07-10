@@ -59,7 +59,7 @@
         <div style="text-align: center; padding: 40px; color: #555;">No execution history records found in this partition.</div>
         {% endfor %}
     </div>
-	<script>
+<script>
     function promptForNote(eventId, currentNote) {
         // Prompt the user, pre-filling with the existing note if there is one
         let newNote = prompt("Add or edit completion note (leave blank to clear):", currentNote);
@@ -69,8 +69,17 @@
             return false;
         }
         
-        // Redirect to the new python route with the text
-        window.location.href = "/update_note/" + eventId + "?note=" + encodeURIComponent(newNote);
+        // Create a hidden form on the fly to force a POST request
+        let form = document.createElement('form');
+        form.method = 'POST';
+        
+        // We attach the note to the URL so Flask's request.args.get('note') still works perfectly
+        form.action = "/update_note/" + eventId + "?note=" + encodeURIComponent(newNote);
+        
+        // Append it to the document and submit it
+        document.body.appendChild(form);
+        form.submit();
+        
         return false;
     }
 </script>

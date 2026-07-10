@@ -137,11 +137,17 @@
                         </div>
                     </div>
 
-                <div class="btn-group">
-                    <a href="/delete/{{ event.id }}" class="btn delete-btn-modal" onclick="return confirm('Permanently delete this event instance?');">Delete</a>
-                    <a href="/" class="btn cancel-btn">Cancel</a>
-                    <button type="submit" class="btn save-btn">Save</button>
-                </div>
+			<div class="btn-group">
+				<button type="submit" 
+						formaction="/delete/{{ event.id }}" 
+						formmethod="POST" 
+						class="btn delete-btn-modal" 
+						onclick="return confirm('Permanently delete this event instance?');">
+					Delete
+				</button>
+				<a href="/" class="btn cancel-btn">Cancel</a>
+				<button type="submit" class="btn save-btn">Save</button>
+			</div>
             </form>
         </div>
     </div>

@@ -115,12 +115,16 @@
                     {% endif %}
                 </div>
                 
-                <div class="card-actions">
-                    {% if e.template_id %}
-                        <a href="/skip/{{ e.id }}" class="action-icon skip-icon" title="Drop current window and spawn next occurrence">Skip</a>
-                    {% endif %}
-                    <a href="/toggle/{{ e.id }}" class="action-icon complete-icon">Complete</a>
-                </div>
+				<div class="card-actions">
+					{% if e.template_id %}
+						<form action="/skip/{{ e.id }}" method="POST" style="margin: 0; padding: 0;">
+							<button type="submit" class="action-icon skip-icon" title="Drop current window and spawn next occurrence" style="border: none; font-family: inherit; cursor: pointer;">Skip</button>
+						</form>
+					{% endif %}
+					<form action="/toggle/{{ e.id }}" method="POST" style="margin: 0; padding: 0;">
+						<button type="submit" class="action-icon complete-icon" style="border: none; font-family: inherit; cursor: pointer;">Complete</button>
+					</form>
+				</div>
             </div>
             
             <div class="card-metadata">

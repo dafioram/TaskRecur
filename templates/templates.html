@@ -75,7 +75,11 @@
                     <span class="badge badge-date">{{ entry.next_projected }}</span>
                 </td>
                 <td>
-                    <a href="/template/delete/{{ entry.template.id }}" class="delete-link" onclick="return confirm('Deleting this template stops all future iterations. The historical events will remain untouched.');">Tear Down</a>
+                    <form action="/template/delete/{{ entry.template.id }}" method="POST" style="margin: 0; padding: 0;">
+						<button type="submit" class="delete-link" style="background: transparent; border: none; padding: 0; font-family: inherit; cursor: pointer;" onclick="return confirm('Deleting this template stops all future iterations. The historical events will remain untouched.');">
+							Tear Down
+						</button>
+					</form>
                 </td>
             </tr>
             {% else %}
