@@ -1,5 +1,7 @@
-flask
-flask-sqlalchemy
-gunicorn
-python-dateutil
-tzdata
+Flask==3.1.*
+Flask-SQLAlchemy==3.1.*
+gunicorn==26.0.*
+Jinja2==3.1.*
+python-dateutil==2.9.*
+SQLAlchemy==2.0.*
+tzdata==2026.2

@@ -296,7 +296,3 @@ def api_backup():
         return jsonify({"status": "success", "message": "Database backup completed.", "file": result}), 200
     else:
         return jsonify({"status": "error", "message": "Backup failed.", "error_details": result}), 500
-
-if __name__ == '__main__':
-    port_num = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port_num, debug=True)
