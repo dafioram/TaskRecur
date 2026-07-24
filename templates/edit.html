@@ -48,15 +48,15 @@
             display: none; gap: 10px;
         }
 		.inline-inputs { display: flex; gap: 8px; align-items: center; }
-        
-        /* Dedicated class for recurrence numbers to prevent flex stretching */
-        .number-box {
-            background: #2c2c2c; color: #aaa; border: 1px solid #333;
-            padding: 10px 4px; border-radius: 6px; font-size: 14px; outline: none;
-            width: 60px; /* Tighter width */
-            text-align: center;
-            flex: none; /* Completely disables stretching */
-        }
+
+		/* Dedicated class for recurrence numbers to prevent flex stretching */
+		.number-box {
+			background: #2c2c2c; color: #aaa; border: 1px solid #333;
+			padding: 10px 4px; border-radius: 6px; font-size: 14px; outline: none;
+			width: 45px; /* Reduced from 60px for a tight 2-digit fit */
+			text-align: center;
+			flex: none; /* Completely disables stretching */
+		}
         
         .inline-inputs select { width: auto; padding: 8px 12px; }
 
@@ -123,7 +123,7 @@
                     <div id="pane-calendar" class="config-pane">
                         <div class="inline-inputs">
                             <span>Every</span>
-                            <input type="number" name="calendar_interval" class="number-box" min="1" value="{{ template.interval_value if template and template.recurrence_type == 'calendar' else 1 }}">
+                            <input type="number" name="calendar_interval" class="number-box" min="1" max="99" value="{{ template.interval_value if template and template.recurrence_type == 'calendar' else 1 }}">
                             <span>years on:</span>
                             
                             <select name="calendar_month">
