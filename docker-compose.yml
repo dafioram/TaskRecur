@@ -7,7 +7,6 @@ services:
       - .env
     environment:
       - TZ=${TZ:-America/New_York} # Forces the container OS to use Eastern Time
-      - API_BACKUP_KEY=${API_BACKUP_KEY}
     ports:
       - "${PORT:-5000}:5000"
     volumes:

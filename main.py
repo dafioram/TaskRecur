@@ -1,18 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
-from sqlalchemy import text
-from werkzeug.middleware.proxy_fix import ProxyFix
-import os
-import time
 import datetime
+import hmac
+import os
 
-from database import db, Event, RecurrenceTemplate, init_db, perform_backup
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# --- TIMEZONE SETUP ---
-# Force Python to respect the TZ environment variable, defaulting to Eastern Time
-os.environ['TZ'] = os.environ.get('TZ', 'America/New_York')
-if hasattr(time, 'tzset'):
-    time.tzset() # Syncs the C library time (works on Linux/Docker, safely ignored on Windows)
-# ----------------------
+from database import db, Event, RecurrenceTemplate, UNITS, init_db, perform_backup, now, today
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -27,272 +20,259 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 init_db(app)
 
-def get_assignee_colors(unique_assignees):
-    PALETTE = ['#d0bcff', '#448aff', '#69f0ae', '#ffab40', '#ff5252', '#ff80ab', '#64ffda', '#536dfe']
-    colors = {}
-    for i, a in enumerate(sorted(list(unique_assignees))):
-        colors[a] = PALETTE[i % len(PALETTE)]
-    return colors
 
-def get_label_colors(unique_labels):
-    LABEL_PALETTE = ['purple', 'blue', 'green', 'orange', 'red', 'pink', 'teal', 'indigo']
-    colors = {}
-    for i, lbl in enumerate(sorted(unique_labels)):
-        colors[lbl] = LABEL_PALETTE[i % len(LABEL_PALETTE)]
-    return colors
+def clean(value, title=False):
+    value = (value or '').strip()
+    if not value:
+        return None
+    return value.title() if title else value
+
+
+def positive_int(value, default=1):
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def spawn_next(event):
+    """Create the next occurrence of a recurring event (if it has a live template)."""
+    template = db.session.get(RecurrenceTemplate, event.template_id) if event.template_id else None
+    if not (template and template.is_active):
+        return
+    if template.recurrence_type == 'interval' and template.interval_unit in ('months', 'years') \
+            and not template.calendar_day and not template.monthly_week:
+        template.set_anchor_from(event.due_date)  # lock older templates to their current day
+    next_date = template.calculate_next_date(event.due_date)
+    if next_date:
+        db.session.add(Event(
+            template_id=template.id, content=template.title,
+            context=event.context, label=template.label,
+            assignee=template.assignee, due_date=next_date,
+        ))
+
+
+def detach_template(template_id):
+    """Remove a template and clear every reference to it (SQLite reuses ids)."""
+    Event.query.filter_by(template_id=template_id).update({'template_id': None})
+    template = db.session.get(RecurrenceTemplate, template_id)
+    if template:
+        db.session.delete(template)
+
 
 @app.route('/')
 def index():
-    all_events = Event.query.all()
-    
-    children_map = {}
-    for e in all_events:
-        if e.parent_id:
-            children_map.setdefault(e.parent_id, []).append(e)
+    active = Event.query.filter(Event.completed_at.is_(None)).all()
+
+    label_counts, assignee_counts = {}, {}
+    for e in active:
+        if e.label:
+            label_counts[e.label] = label_counts.get(e.label, 0) + 1
+        key = e.assignee or 'Unassigned'
+        assignee_counts[key] = assignee_counts.get(key, 0) + 1
 
     filter_label = request.args.get('label')
     filter_assignee = request.args.get('assignee')
-
-    label_counts, assignee_counts, unique_assignees, unique_labels = {}, {}, set(), set()
-    total_active = 0
-    
-    for e in all_events:
-        if e.completed_at is None:
-            total_active += 1
-            if e.label:
-                label_counts[e.label] = label_counts.get(e.label, 0) + 1
-                unique_labels.add(e.label)
-            assgn_key = e.assignee if e.assignee else "Unassigned"
-            assignee_counts[assgn_key] = assignee_counts.get(assgn_key, 0) + 1
-        if e.assignee:
-            unique_assignees.add(e.assignee)
-
-    query = Event.query.filter(Event.completed_at == None)
+    shown = active
     if filter_label:
-        query = query.filter(Event.label == filter_label)
+        shown = [e for e in shown if e.label == filter_label]
     if filter_assignee:
-        if filter_assignee == 'Unassigned':
-            query = query.filter((Event.assignee == None) | (Event.assignee == ''))
-        else:
-            query = query.filter(Event.assignee == filter_assignee)
-        
-    active_events = sorted(query.all(), key=lambda x: x.due_date)
+        want = None if filter_assignee == 'Unassigned' else filter_assignee
+        shown = [e for e in shown if (e.assignee or None) == want]
+    shown.sort(key=lambda e: (e.due_date, e.id))
 
-    return render_template('index.html', 
-                           events=active_events, 
-                           all_labels=[(lbl, label_counts.get(lbl, 0)) for lbl in sorted(unique_labels)], 
-                           all_assignees=[(a, assignee_counts.get(a, 0)) for a in sorted(unique_assignees)],
-                           assignee_colors=get_assignee_colors(unique_assignees),
-                           label_colors=get_label_colors(unique_labels),
-                           unassigned_count=assignee_counts.get("Unassigned", 0),
+    named_assignees = sorted(a for a in assignee_counts if a != 'Unassigned')
+    return render_template('index.html',
+                           events=shown,
+                           all_labels=sorted(label_counts.items()),
+                           all_assignees=[(a, assignee_counts[a]) for a in named_assignees],
+                           unassigned_count=assignee_counts.get('Unassigned', 0),
                            active_filter=filter_label,
                            active_assignee=filter_assignee,
-                           children_map=children_map,
-                           total_active=total_active,
-                           datetime=datetime)
+                           today=today())
+
 
 @app.route('/history')
 def history():
-    finished_events = Event.query.filter(Event.completed_at.isnot(None)).order_by(Event.completed_at.desc()).all()
-    return render_template('history.html', events=finished_events)
+    finished = (Event.query.filter(Event.completed_at.isnot(None))
+                .order_by(Event.completed_at.desc()).limit(500).all())
+    # Undo is offered for one-off tasks, and for the latest completion of each
+    # recurring series (undoing an older one would leave two copies active).
+    undoable, seen_series = set(), set()
+    for e in finished:
+        if e.template_id is None:
+            undoable.add(e.id)
+        elif e.template_id not in seen_series:
+            seen_series.add(e.template_id)
+            undoable.add(e.id)
+    return render_template('history.html', events=finished, undoable=undoable)
+
+
+@app.route('/undo/<int:id>', methods=['POST'])
+def undo_event(id):
+    """Put a completed/skipped task back on the timeline and remove the
+    next occurrence that completing it created."""
+    event = db.session.get(Event, id)
+    if not event or event.completed_at is None:
+        return redirect(url_for('history'))
+    if event.template_id:
+        latest = (Event.query.filter(Event.template_id == event.template_id, Event.completed_at.isnot(None))
+                  .order_by(Event.completed_at.desc()).first())
+        if latest.id != event.id:
+            return redirect(url_for('history'))
+        spawned = Event.query.filter(Event.template_id == event.template_id, Event.completed_at.is_(None),
+                                     Event.created_at >= event.completed_at)
+        for nxt in spawned:
+            db.session.delete(nxt)
+    event.completed_at = None
+    event.skipped = False
+    db.session.commit()
+    return redirect(url_for('history'))
+
 
 @app.route('/update_note/<int:id>', methods=['POST'])
 def update_note(id):
     event = db.session.get(Event, id)
     if event:
-        note = request.args.get('note')
-        # If they pass a note, save it. If they pass an empty string, clear it.
-        if note is not None:
-            event.completion_note = note.strip() if note.strip() else None
+        event.completion_note = clean(request.form.get('note'))
         db.session.commit()
     return redirect(url_for('history'))
 
+
 @app.route('/templates')
 def view_templates():
-    templates = RecurrenceTemplate.query.all()
-    template_statuses = []
-    
-    for t in templates:
+    rows = []
+    for t in RecurrenceTemplate.query.order_by(RecurrenceTemplate.title).all():
         active_inst = Event.query.filter_by(template_id=t.id, completed_at=None).first()
-        next_calc = t.calculate_next_date(active_inst.due_date if active_inst else None)
-        
-        template_statuses.append({
+        rows.append({
             'template': t,
             'active_instance': active_inst,
-            'next_projected': next_calc,
-            # Use the template's title directly
-            'event_name': t.title 
+            'next_projected': t.calculate_next_date(active_inst.due_date if active_inst else None),
         })
-        
-    return render_template('templates.html', templates=template_statuses)
+    return render_template('templates.html', templates=rows)
+
 
 @app.route('/add', methods=['POST'])
 def add_event():
-    content = request.form.get('content')
-    raw_label = request.form.get('label')
+    content = clean(request.form.get('content'))
     due_str = request.form.get('due_date')
-    
-    label = raw_label.strip().title() if raw_label else None
-    due_date = datetime.date.fromisoformat(due_str) if due_str else datetime.date.today()
-
     if content:
-        new_event = Event(content=content, due_date=due_date, label=label)
-        db.session.add(new_event)
+        db.session.add(Event(
+            content=content,
+            due_date=datetime.date.fromisoformat(due_str) if due_str else today(),
+            label=clean(request.form.get('label'), title=True),
+        ))
         db.session.commit()
     return redirect(url_for('index'))
+
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit_event(id):
     event = db.session.get(Event, id)
-    if not event: return redirect(url_for('index'))
-    
+    if not event:
+        return redirect(url_for('index'))
+
     template = db.session.get(RecurrenceTemplate, event.template_id) if event.template_id else None
 
     if request.method == 'POST':
-        event.content = request.form.get('content')
-        event.context = request.form.get('context') or None
-        
-        raw_label = request.form.get('label')
-        event.label = raw_label.strip().title() if raw_label else None
-        
-        raw_assignee = request.form.get('assignee')
-        event.assignee = raw_assignee.strip().title() if raw_assignee else None
+        event.content = clean(request.form.get('content')) or event.content
+        event.context = clean(request.form.get('context'))
+        event.label = clean(request.form.get('label'), title=True)
+        event.assignee = clean(request.form.get('assignee'), title=True)
 
         due_str = request.form.get('due_date')
-        if due_str: event.due_date = datetime.date.fromisoformat(due_str)
-        
-        # Epic / Subtask circular loop protection
-        parent_id_raw = request.form.get('parent_id')
-        if parent_id_raw and parent_id_raw.isdigit():
-            pid_int = int(parent_id_raw)
-            if pid_int != event.id:
-                circular = False
-                curr = db.session.get(Event, pid_int)
-                while curr:
-                    if curr.id == event.id:
-                        circular = True
-                        break
-                    curr = db.session.get(Event, curr.parent_id) if curr.parent_id else None
-                event.parent_id = None if circular else pid_int
-        else:
-            event.parent_id = None
+        if due_str:
+            event.due_date = datetime.date.fromisoformat(due_str)
 
-        # Process Recurrence Configurations
         rec_type = request.form.get('recurrence_type')
-        if rec_type and rec_type != 'none':
+        if rec_type in ('relative', 'interval'):
             if not template:
-                # 1. Instantiate the object with the required field up front
                 template = RecurrenceTemplate(title=event.content, recurrence_type=rec_type)
                 db.session.add(template)
-            
-            # 2. Update all fields cleanly
             template.title = event.content
             template.recurrence_type = rec_type
             template.label = event.label
             template.assignee = event.assignee
-            
-            if rec_type in ['relative', 'interval']:
-                # The 'or 1' protects against empty strings if the user clears the box
-                template.interval_value = int(request.form.get('interval_value') or 1)
-                template.interval_unit = request.form.get('interval_unit', 'days')
-            elif rec_type == 'calendar':
-                # Apply the same protection to the calendar fields
-                template.interval_value = int(request.form.get('calendar_interval') or 1)
-                template.calendar_month = int(request.form.get('calendar_month') or 1)
-                template.calendar_day = int(request.form.get('calendar_day') or 1)
-                
-            # 3. Safely flush or let SQLAlchemy handle it at commit time
+            template.interval_value = positive_int(request.form.get('interval_value'))
+            unit = request.form.get('interval_unit')
+            template.interval_unit = unit if unit in UNITS else 'days'
+            template.set_anchor_from(event.due_date, request.form.get('monthly_mode', 'day'))
             db.session.flush()
             event.template_id = template.id
-        else:
-            if template:
-                db.session.delete(template)
-            event.template_id = None
+        elif template:
+            detach_template(template.id)
 
         db.session.commit()
         return redirect(url_for('index'))
 
-    all_events = Event.query.filter(Event.id != id, Event.completed_at == None).all()
-    unique_assignees = {e.assignee for e in Event.query.all() if e.assignee}
-    unique_labels = {e.label for e in Event.query.all() if e.label}
+    labels = [r[0] for r in db.session.query(Event.label).filter(Event.label.isnot(None)).distinct()]
+    assignees = [r[0] for r in db.session.query(Event.assignee).filter(Event.assignee.isnot(None)).distinct()]
+    return render_template('edit.html', event=event, template=template,
+                           labels=sorted(labels), assignees=sorted(assignees))
 
-    return render_template('edit.html', event=event, template=template, all_tasks=all_events,
-                           unique_assignees=sorted(list(unique_assignees)),
-                           all_labels=[(l, 0) for l in sorted(unique_labels)],
-                           datetime=datetime)
 
 @app.route('/toggle/<int:id>', methods=['POST'])
 def toggle_event(id):
     event = db.session.get(Event, id)
-    if event:
-        event.completed_at = datetime.datetime.now()
-        
-        # Spawn new chronological instance if blueprint rules exist
-        if event.template_id:
-            template = db.session.get(RecurrenceTemplate, event.template_id)
-            if template and template.is_active:
-                next_date = template.calculate_next_date(event.due_date)
-                if next_date:
-                    next_ev = Event(
-                        template_id=template.id, content=template.title,
-                        context=event.context, label=template.label,
-                        assignee=template.assignee, due_date=next_date,
-                        parent_id=event.parent_id
-                    )
-                    db.session.add(next_ev)
+    if event and event.completed_at is None:  # ignore double-taps / resubmits
+        event.completed_at = now()
+        spawn_next(event)
         db.session.commit()
-    return redirect(url_for('index'))
+    return redirect(request.referrer or url_for('index'))
+
 
 @app.route('/skip/<int:id>', methods=['POST'])
 def skip_event(id):
     event = db.session.get(Event, id)
-    if event and event.template_id:
-        event.completed_at = datetime.datetime.now()
-        event.completion_note = "[SKIPPED]"
-        
-        template = db.session.get(RecurrenceTemplate, event.template_id)
-        if template and template.is_active:
-            next_date = template.calculate_next_date(event.due_date)
-            if next_date:
-                next_ev = Event(
-                    template_id=template.id, content=template.title,
-                    context=event.context, label=template.label,
-                    assignee=template.assignee, due_date=next_date,
-                    parent_id=event.parent_id
-                )
-                db.session.add(next_ev)
+    if event and event.template_id and event.completed_at is None:
+        event.completed_at = now()
+        event.skipped = True
+        spawn_next(event)
         db.session.commit()
-    return redirect(url_for('index'))
+    return redirect(request.referrer or url_for('index'))
+
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete_event(id):
     event = db.session.get(Event, id)
     if event:
+        # Deleting the live instance of a recurring task ends the series
+        # (Skip is the way to drop a single occurrence).
+        if event.template_id and event.completed_at is None:
+            detach_template(event.template_id)
         db.session.delete(event)
         db.session.commit()
     return redirect(url_for('index'))
 
+
 @app.route('/template/delete/<int:id>', methods=['POST'])
 def delete_template(id):
-    template = db.session.get(RecurrenceTemplate, id)
-    if template:
-        db.session.delete(template)
+    detach_template(id)
+    db.session.commit()
+    return redirect(url_for('view_templates'))
+
+
+@app.route('/template/resume/<int:id>', methods=['POST'])
+def resume_template(id):
+    """Re-create the active instance for a template that has none."""
+    t = db.session.get(RecurrenceTemplate, id)
+    if t and not Event.query.filter_by(template_id=id, completed_at=None).first():
+        db.session.add(Event(template_id=t.id, content=t.title, label=t.label,
+                             assignee=t.assignee, due_date=t.calculate_next_date(None)))
         db.session.commit()
     return redirect(url_for('view_templates'))
 
+
 @app.route('/api/backup', methods=['POST'])
 def api_backup():
-    expected_api_key = os.environ.get('API_BACKUP_KEY')
-    
-    if not expected_api_key:
+    expected = os.environ.get('API_BACKUP_KEY')
+    if not expected:
         return jsonify({"status": "error", "message": "Backup API key not configured on server."}), 403
-        
-    provided_key = request.headers.get('X-Backup-Key')
-    if not provided_key or provided_key != expected_api_key:
+    provided = request.headers.get('X-Backup-Key', '')
+    if not hmac.compare_digest(provided.encode(), expected.encode()):
         return jsonify({"status": "error", "message": "Unauthorized: Invalid or missing Backup key."}), 401
 
     success, result = perform_backup(db_path, data_dir)
     if success:
         return jsonify({"status": "success", "message": "Database backup completed.", "file": result}), 200
-    else:
-        return jsonify({"status": "error", "message": "Backup failed.", "error_details": result}), 500
+    return jsonify({"status": "error", "message": "Backup failed.", "error_details": result}), 500

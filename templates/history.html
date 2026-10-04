@@ -19,41 +19,45 @@
             background: #1e1e1e; border-radius: 6px; padding: 14px; margin-bottom: 10px;
             border-left: 4px solid #555; display: flex; justify-content: space-between; align-items: center;
         }
+        .undo-btn { background: #2c2c2c; color: #bb86fc; border: none; border-radius: 4px; padding: 4px 10px; font-size: 0.75rem; font-weight: bold; cursor: pointer; font-family: inherit; }
         .stamp { font-size: 0.75rem; color: #666; font-weight: bold; background: #161616; padding: 4px 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1 style="color: #a7ffeb; margin: 0;">Completed History Log</h1>
+        <h1 style="color: #a7ffeb; margin: 0;">Activity</h1>
         <a href="/" class="back-link">← Return to Workspace</a>
     </div>
 
 <div class="stream">
         {% for e in events %}
-        <div class="history-card" style="{% if e.completion_note == '[SKIPPED]' %}border-left-color: #ffab40; opacity: 0.6;{% endif %}">
+        <div class="history-card" style="{% if e.skipped %}border-left-color: #ffab40;{% endif %}">
             <div style="flex: 1;">
                 <span style="font-weight: 500; text-decoration: line-through; color: #888;">{{ e.content }}</span>
-                
-				{% if e.completion_note and e.completion_note != '[SKIPPED]' %}
-					<span style="font-size: 0.85rem; color: #a792c1; font-style: italic; margin-left: 8px; padding-left: 8px; border-left: 2px solid #444; cursor: pointer;" 
-						  data-note="{{ e.completion_note }}" 
-						  onclick="return promptForNote({{ e.id }}, this.getAttribute('data-note'));" 
-						  title="Edit Note">
-						"{{ e.completion_note }}" ✏️
-					</span>
-				{% elif e.completion_note != '[SKIPPED]' %}
-					<span style="font-size: 0.75rem; color: #555; margin-left: 8px; cursor: pointer; text-decoration: underline;" 
-						  onclick="return promptForNote({{ e.id }}, '');">
-						+ Add Note
-					</span>
-				{% else %}
-					 <span style="font-size: 0.8rem; color: #ffab40; margin-left: 8px;">[SKIPPED]</span>
-				{% endif %}
-                
+                {% if e.skipped %}<span style="font-size: 0.75rem; color: #ffab40; margin-left: 8px; font-weight: bold;">SKIPPED</span>{% endif %}
+
+                {% if e.completion_note %}
+                    <span style="font-size: 0.85rem; color: #a792c1; font-style: italic; margin-left: 8px; padding-left: 8px; border-left: 2px solid #444; cursor: pointer;"
+                          data-note="{{ e.completion_note }}"
+                          onclick="return promptForNote({{ e.id }}, this.getAttribute('data-note'));"
+                          title="Edit Note">"{{ e.completion_note }}" ✏️</span>
+                {% else %}
+                    <span style="font-size: 0.75rem; color: #555; margin-left: 8px; cursor: pointer; text-decoration: underline;"
+                          onclick="return promptForNote({{ e.id }}, '');">+ Add Note</span>
+                {% endif %}
+
                 <div style="font-size: 0.75rem; color: #555; margin-top: 4px;">Originally due on {{ e.due_date }}</div>
             </div>
-            <span class="stamp">Finished: {{ e.completed_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                <span class="stamp">{{ 'Skipped' if e.skipped else 'Finished' }}: {{ e.completed_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% if e.id in undoable %}
+                    <form action="{{ url_for('undo_event', id=e.id) }}" method="POST" style="margin: 0;"
+                          onsubmit="return confirm({{ ('Put this back on the timeline?' ~ ('\n\nThe next occurrence it created will be removed.' if e.template_id else ''))|tojson|forceescape }});">
+                        <button type="submit" class="undo-btn">↩ Undo</button>
+                    </form>
+                {% endif %}
+            </div>
         </div>
         {% else %}
         <div style="text-align: center; padding: 40px; color: #555;">No execution history records found in this partition.</div>
@@ -69,17 +73,16 @@
             return false;
         }
         
-        // Create a hidden form on the fly to force a POST request
-        let form = document.createElement('form');
+        // POST the note in the form body
+        const form = document.createElement('form');
         form.method = 'POST';
-        
-        // We attach the note to the URL so Flask's request.args.get('note') still works perfectly
-        form.action = "/update_note/" + eventId + "?note=" + encodeURIComponent(newNote);
-        
-        // Append it to the document and submit it
+        form.action = "/update_note/" + eventId;
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'note'; input.value = newNote;
+        form.appendChild(input);
         document.body.appendChild(form);
         form.submit();
-        
+
         return false;
     }
 </script>

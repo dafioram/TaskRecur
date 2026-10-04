@@ -36,39 +36,33 @@
         <a href="/" class="back-link">← Return to Workspace</a>
     </div>
 
+    <div style="overflow-x: auto;">
     <table class="template-table">
 		<thead>
             <tr>
                 <th>Event Name</th>
                 <th>Blueprint Config</th>
                 <th>Active Tracking Status</th>
-                <th>Next Projected Window</th>
+                <th>Next After Current</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for entry in templates %}
             <tr>
-				<td>{{ entry.event_name }}</td>
-				<td>
-                    <span class="badge badge-type">{{ entry.template.recurrence_type|upper }}</span>
-                    <span style="font-size: 0.85rem; color: #aaa; margin-left: 4px;">
-                        {% if entry.template.recurrence_type in ['relative', 'interval'] %}
-                            Every {{ entry.template.interval_value }} {{ entry.template.interval_unit }}
-                        {% else %}
-                            {% if entry.template.interval_value == 1 %}
-                                Every year on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
-                            {% else %}
-                                Every {{ entry.template.interval_value }} years on Month {{ entry.template.calendar_month }}, Day {{ entry.template.calendar_day }}
-                            {% endif %}
-                        {% endif %}
-                    </span>
+				<td>{{ entry.template.title }}</td>
+                <td>
+                    <span class="badge badge-type">{{ 'AFTER DONE' if entry.template.recurrence_type == 'relative' else 'FIXED' }}</span>
+                    <span style="font-size: 0.85rem; color: #aaa; margin-left: 4px;">{{ entry.template.describe() }}</span>
                 </td>
                 <td>
                     {% if entry.active_instance %}
                         <span style="color: #69f0ae; font-size: 0.85rem;">● Tracked (Event #{{ entry.active_instance.id }})</span>
                     {% else %}
-                        <span style="color: #ffab40; font-size: 0.85rem;">⚠️ No Active Row in View</span>
+                        <form action="{{ url_for('resume_template', id=entry.template.id) }}" method="POST" style="margin: 0;">
+                            <span style="color: #ffab40; font-size: 0.85rem;">⚠️ No active task</span>
+                            <button type="submit" style="margin-left: 6px; background: #2c2c2c; color: #69f0ae; border: none; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-family: inherit;">Resume</button>
+                        </form>
                     {% endif %}
                 </td>
                 <td>
@@ -76,7 +70,7 @@
                 </td>
                 <td>
                     <form action="/template/delete/{{ entry.template.id }}" method="POST" style="margin: 0; padding: 0;">
-						<button type="submit" class="delete-link" style="background: transparent; border: none; padding: 0; font-family: inherit; cursor: pointer;" onclick="return confirm('Deleting this template stops all future iterations. The historical events will remain untouched.');">
+						<button type="submit" class="delete-link" style="background: transparent; border: none; padding: 0; font-family: inherit; cursor: pointer;" onclick="return confirm('Stop this from repeating? The current task (if any) stays as a one-off and history is kept.');">
 							Tear Down
 						</button>
 					</form>
@@ -89,6 +83,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 </body>
 </html>

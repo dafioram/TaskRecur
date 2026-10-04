@@ -84,65 +84,54 @@
                 <div class="meta-inputs">
                     <input type="text" name="label" class="small-input" placeholder="Label" list="labels-list" value="{{ event.label or '' }}">
                     <input type="text" name="assignee" class="small-input" placeholder="Assignee" list="assignees-list" value="{{ event.assignee or '' }}">
-                    <input type="date" name="due_date" class="small-input" value="{{ event.due_date.isoformat() if event.due_date else '' }}" required>
+                    <input type="date" name="due_date" class="small-input" style="color-scheme: dark;" value="{{ event.due_date.isoformat() if event.due_date else '' }}" required>
                 </div>
 
+                <datalist id="labels-list">{% for l in labels %}<option value="{{ l }}">{% endfor %}</datalist>
+                <datalist id="assignees-list">{% for a in assignees %}<option value="{{ a }}">{% endfor %}</datalist>
+
                 <div class="recurrence-box" style="margin-top: 15px;">
-                    <span style="font-size: 0.85rem; font-weight: bold; color: #bb86fc;">Recurrence Configuration</span>
+                    <span style="font-size: 0.85rem; font-weight: bold; color: #bb86fc;">Repeat</span>
                     <div class="radio-group">
                         <label class="radio-label">
                             <input type="radio" name="recurrence_type" value="none" {% if not template %}checked{% endif %} onchange="toggleRecurrencePanes()">
-                            One-off Event (Does not repeat)
+                            Does not repeat
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recurrence_type" value="interval" {% if template and template.recurrence_type != 'relative' %}checked{% endif %} onchange="toggleRecurrencePanes()">
+                            On a fixed schedule (counted from the due date)
                         </label>
                         <label class="radio-label">
                             <input type="radio" name="recurrence_type" value="relative" {% if template and template.recurrence_type == 'relative' %}checked{% endif %} onchange="toggleRecurrencePanes()">
-                            Relative Interval (From actual completion date)
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="recurrence_type" value="interval" {% if template and template.recurrence_type == 'interval' %}checked{% endif %} onchange="toggleRecurrencePanes()">
-                            Absolute Interval (From previous scheduled due date)
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="recurrence_type" value="calendar" {% if template and template.recurrence_type == 'calendar' %}checked{% endif %} onchange="toggleRecurrencePanes()">
-                            Calendar Anchor (Specific annual/monthly date)
+                            After I finish it (counted from completion)
                         </label>
                     </div>
 
-					<div id="pane-interval" class="config-pane">
-                        <div class="inline-inputs">
-                            <span>Repeat every</span>
-                            <input type="number" name="interval_value" class="number-box" min="1" value="{{ template.interval_value if template else 1 }}">
-                            <select name="interval_unit">
-                                <option value="days" {% if template and template.interval_unit == 'days' %}selected{% endif %}>Days</option>
-                                <option value="weeks" {% if template and template.interval_unit == 'weeks' %}selected{% endif %}>Weeks</option>
-                                <option value="months" {% if template and template.interval_unit == 'months' %}selected{% endif %}>Months</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="pane-calendar" class="config-pane">
+                    <div id="pane-interval" class="config-pane" style="flex-direction: column;">
                         <div class="inline-inputs">
                             <span>Every</span>
-                            <input type="number" name="calendar_interval" class="number-box" min="1" max="99" value="{{ template.interval_value if template and template.recurrence_type == 'calendar' else 1 }}">
-                            <span>years on:</span>
-                            
-                            <select name="calendar_month">
-                                {% for m in range(1, 13) %}
-                                    <option value="{{ m }}" {% if template and template.calendar_month == m %}selected{% endif %}>
-                                        {{ datetime.date(2000, m, 1).strftime('%B') }}
-                                    </option>
+                            <input type="number" name="interval_value" class="number-box" min="1" max="999" value="{{ template.interval_value if template else 1 }}">
+                            <select name="interval_unit" onchange="toggleRecurrencePanes()">
+                                {% for unit in ['days', 'weeks', 'months', 'years'] %}
+                                    <option value="{{ unit }}" {% if template and template.interval_unit == unit %}selected{% endif %}>{{ unit|capitalize }}</option>
                                 {% endfor %}
                             </select>
-                            <input type="number" name="calendar_day" class="number-box" min="1" max="31" placeholder="Day" value="{{ template.calendar_day if template else 1 }}">
                         </div>
+                        <select name="monthly_mode" id="monthly-mode" style="margin-top: 4px; font-size: 14px; padding: 8px 12px;">
+                            <option value="day" {% if not template or template.monthly_mode() == 'day' %}selected{% endif %}></option>
+                            <option value="nth" {% if template and template.monthly_mode() == 'nth' %}selected{% endif %}></option>
+                            <option value="last" {% if template and template.monthly_mode() == 'last' %}selected{% endif %}></option>
+                        </select>
+                        <span id="anchor-hint" style="font-size: 0.75rem; color: #777;">Based on the due date. The 31st becomes the last day of shorter months; Feb 29 becomes Feb 28.</span>
                     </div>
+                </div>
 
 			<div class="btn-group">
 				<button type="submit" 
 						formaction="/delete/{{ event.id }}" 
 						formmethod="POST" 
 						class="btn delete-btn-modal" 
-						onclick="return confirm('Permanently delete this event instance?');">
+						onclick="return confirm({{ ('Delete this task AND stop it repeating?\n\nTo drop only this occurrence, use Skip instead.' if template else 'Permanently delete this task?')|tojson|forceescape }});">
 					Delete
 				</button>
 				<a href="/" class="btn cancel-btn">Cancel</a>
@@ -153,14 +142,40 @@
     </div>
 
     <script>
+        const ORD = ['1st', '2nd', '3rd', '4th'];
+        const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        // Label the monthly options from the current due date, e.g.
+        // "on day 13" / "on the 2nd Tuesday" / "on the last Tuesday".
+        function refreshMonthlyOptions() {
+            const val = document.querySelector('input[name="due_date"]').value;
+            const sel = document.getElementById('monthly-mode');
+            if (!val) return;
+            const [y, m, d] = val.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            const n = Math.floor((d - 1) / 7) + 1;
+            const isLast = d + 7 > new Date(y, m, 0).getDate();
+            const day = DAYS[date.getDay()];
+            const [optDay, optNth, optLast] = sel.options;
+            optDay.text = `Monthly on day ${d}`;
+            optNth.text = `Monthly on the ${ORD[n - 1] || ''} ${day}`;
+            optLast.text = `Monthly on the last ${day}`;
+            optNth.hidden = optNth.disabled = n > 4;
+            optLast.hidden = optLast.disabled = !isLast;
+            if (sel.selectedOptions[0].disabled) sel.value = isLast && n > 4 ? 'last' : 'day';
+        }
+
         function toggleRecurrencePanes() {
             const selected = document.querySelector('input[name="recurrence_type"]:checked').value;
-            const paneInterval = document.getElementById('pane-interval');
-            const paneCalendar = document.getElementById('pane-calendar');
-            
-            paneInterval.style.display = (selected === 'relative' || selected === 'interval') ? 'flex' : 'none';
-            paneCalendar.style.display = (selected === 'calendar') ? 'flex' : 'none';
+            const unit = document.querySelector('select[name="interval_unit"]').value;
+            document.getElementById('pane-interval').style.display = selected === 'none' ? 'none' : 'flex';
+            const fixedMonthly = selected === 'interval' && unit === 'months';
+            document.getElementById('monthly-mode').style.display = fixedMonthly ? 'block' : 'none';
+            document.getElementById('anchor-hint').style.display =
+                selected === 'interval' && (unit === 'months' || unit === 'years') ? 'block' : 'none';
+            refreshMonthlyOptions();
         }
+        document.querySelector('input[name="due_date"]').addEventListener('change', refreshMonthlyOptions);
         // Initialize visibility configurations on render
         document.addEventListener("DOMContentLoaded", toggleRecurrencePanes);
     </script>

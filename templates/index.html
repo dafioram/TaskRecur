@@ -12,8 +12,6 @@
             margin: 0; padding: 20px;
         }
         .container { max-width: 700px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .nav-links a { color: #bb86fc; text-decoration: none; margin-left: 15px; font-weight: bold; font-size: 0.95rem; }
         
         .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
         .filter-pill {
@@ -22,13 +20,6 @@
         }
         .filter-pill.active { background-color: #bb86fc; color: #000; }
 
-        .add-box { display: flex; gap: 10px; margin-bottom: 25px; }
-        .add-box input {
-            background: #1e1e1e; border: 1px solid #333; padding: 12px;
-            color: white; border-radius: 8px; font-size: 15px; outline: none;
-        }
-        .add-box input[type="text"] { flex: 1; }
-        .add-btn { background: #bb86fc; color: #000; border: none; padding: 0 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
 
         .event-card {
             background: #1e1e1e; border-left: 4px solid #333; border-radius: 6px;
@@ -63,10 +54,10 @@
         .overdue { color: #ff5252; background: rgba(255,82,82,0.1); }
         
         .tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; font-weight: bold; display: inline-block; }
-        .child-box { margin-left: 25px; border-left: 2px dashed #333; padding-left: 15px; }
     </style>
 </head>
 <body>
+<div class="container">
 	<div class="header-container" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; margin-bottom: 15px;">
 		<h1 style="margin: 0; color: #bb86fc;">Timeline</h1>
 		<div style="display: flex; gap: 15px; font-size: 0.9rem;">
@@ -79,7 +70,7 @@
 		<input type="text" name="content" placeholder="Drop quick entry here..." required
 			   style="flex: 1; min-width: 0; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #222; color: white;">
 		
-		<input type="date" name="due_date" value="{{ datetime.date.today().isoformat() }}" required
+		<input type="date" name="due_date" value="{{ today.isoformat() }}" required
 			   style="width: 130px; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #222; color: white; color-scheme: dark;">
 		
 		<button type="submit" 
@@ -89,11 +80,21 @@
 	</form>
 
     <div class="filter-bar">
-        <a href="/" class="filter-pill {% if not active_filter and not active_assignee %}active{% endif %}">All</a>
+        <a href="{{ url_for('index') }}" class="filter-pill {% if not active_filter and not active_assignee %}active{% endif %}">All</a>
         {% for lbl, count in all_labels %}
-            <a href="/?label={{ lbl }}" class="filter-pill {% if active_filter == lbl %}active{% endif %}">{{ lbl }} ({{ count }})</a>
+            <a href="{{ url_for('index', label=lbl) }}" class="filter-pill {% if active_filter == lbl %}active{% endif %}">{{ lbl }} ({{ count }})</a>
         {% endfor %}
     </div>
+    {% if all_assignees %}
+    <div class="filter-bar">
+        {% for a, count in all_assignees %}
+            <a href="{{ url_for('index', assignee=a) }}" class="filter-pill {% if active_assignee == a %}active{% endif %}">👤 {{ a }} ({{ count }})</a>
+        {% endfor %}
+        {% if unassigned_count %}
+            <a href="{{ url_for('index', assignee='Unassigned') }}" class="filter-pill {% if active_assignee == 'Unassigned' %}active{% endif %}">Unassigned ({{ unassigned_count }})</a>
+        {% endif %}
+    </div>
+    {% endif %}
 
 		{% macro render_event_card(e) %}
         <div class="event-card" style="border-left-color: {{ e.get_urgency_color() }}">
@@ -146,27 +147,17 @@
                         <span class="chevron" style="transition: transform 0.2s ease; display: inline-block;">▶</span> 
                         <span style="font-size: 0.8rem; color: #888;">Details</span>
                     </summary>
-                    <div style="font-size: 0.85rem; color: #ccc; background: #161616; padding: 10px; border-radius: 4px; margin-top: 6px; border-left: 2px solid #333; line-height: 1.4;">
-                        {{ e.context }}
-                    </div>
+                    <div style="font-size: 0.85rem; color: #ccc; background: #161616; padding: 10px; border-radius: 4px; margin-top: 6px; border-left: 2px solid #333; line-height: 1.4; white-space: pre-wrap;">{{ e.context }}</div>
                 </details>
             {% endif %}
         </div>
         {% endmacro %}
 
         {% for e in events %}
-            {% if not e.parent_id %}
-                {{ render_event_card(e) }}
-                {% if children_map[e.id] %}
-                    <div class="child-box">
-                        {% for sub in children_map[e.id] %}
-                            {{ render_event_card(sub) }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endif %}
+            {{ render_event_card(e) }}
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: #555;">Nothing due. Enjoy it.</div>
         {% endfor %}
-    </div>
 </div>
 </body>
 </html>
