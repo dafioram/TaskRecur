@@ -2,6 +2,11 @@
 2. Run `docker compose up -d --build`
 3. Open http://YOUR-SERVER-IP:5000
 
+Docker uses Waitress to read client requests before dispatching them to a
+single application thread. An idle connection can stay open while other
+requests run. Rebuild the image to pick up the server change. Settings in
+`GUNICORN_CMD_ARGS` apply only to deployments still using Gunicorn.
+
 ## Backups
 Backups are on demand. Each call writes a snapshot to `data/backups/` and keeps the 5 newest:
 

@@ -16,5 +16,6 @@ COPY . .
 # Expose the Flask port
 EXPOSE 5000
 
-# Run the app
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+# Buffer client requests before handing them to the single app thread.
+# Flask's ProxyFix already handles forwarded headers.
+CMD ["waitress-serve", "--listen=0.0.0.0:5000", "--threads=1", "--no-clear-untrusted-proxy-headers", "main:app"]
