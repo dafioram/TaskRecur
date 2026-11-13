@@ -1,14 +1,18 @@
 import datetime
 import hmac
+import logging
 import os
+from time import perf_counter
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, g, render_template, request, redirect, url_for, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from database import db, Event, RecurrenceTemplate, UNITS, init_db, perform_backup, now, today
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+access_log = logging.getLogger('taskrecur.access')
+access_log.setLevel(logging.INFO)
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
 data_dir = os.path.join(base_dir, 'data')
@@ -19,6 +23,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 init_db(app)
+
+
+@app.before_request
+def start_request_timer():
+    g.request_started_at = perf_counter()
+
+
+@app.after_request
+def log_request(response):
+    elapsed_ms = (perf_counter() - g.request_started_at) * 1000
+    access_log.info('%s %r %d %.1f ms', request.method,
+                    request.script_root + request.path, response.status_code, elapsed_ms)
+    return response
 
 
 def clean(value, title=False):
